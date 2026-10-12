@@ -1,5 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { planets, Planet } from './data/planets';
+
+// Generate fixed star positions once
+const generateStars = () => {
+  const stars: { cx: number; cy: number; r: number; opacity: number }[] = [];
+  for (let i = 0; i < 120; i++) {
+    stars.push({
+      cx: Math.random() * 900,
+      cy: Math.random() * 900,
+      r: Math.random() * 1.2 + 0.3,
+      opacity: Math.random() * 0.6 + 0.2,
+    });
+  }
+  return stars;
+};
 
 function App() {
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
@@ -10,6 +24,8 @@ function App() {
   const animationRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const anglesRef = useRef<number[]>(angles);
+
+  const stars = useMemo(() => generateStars(), []);
 
   const animate = useCallback((timestamp: number) => {
     if (!lastTimeRef.current) lastTimeRef.current = timestamp;
@@ -47,14 +63,20 @@ function App() {
     };
   };
 
+  const handleReset = () => {
+    const newAngles = planets.map(() => Math.random() * Math.PI * 2);
+    anglesRef.current = newAngles;
+    setAngles(newAngles);
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center overflow-hidden">
       {/* Header */}
-      <header className="w-full py-4 px-6 text-center bg-gradient-to-b from-gray-900 to-transparent">
-        <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-orange-400 to-blue-400 bg-clip-text text-transparent">
+      <header className="w-full py-4 px-6 text-center bg-gradient-to-b from-gray-900/80 to-transparent relative z-10">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-yellow-300 via-orange-400 to-blue-400 bg-clip-text text-transparent">
           🌌 Interactive Solar System Explorer
         </h1>
-        <p className="text-gray-400 mt-1 text-sm md:text-base">
+        <p className="text-gray-400 mt-1 text-xs sm:text-sm md:text-base">
           Click on any planet to learn more about it
         </p>
       </header>
@@ -65,9 +87,9 @@ function App() {
         <div className="relative flex-shrink-0">
           <svg
             viewBox="0 0 900 900"
-            className="w-[340px] h-[340px] sm:w-[450px] sm:h-[450px] md:w-[550px] md:h-[550px] lg:w-[600px] lg:h-[600px]"
+            className="w-[320px] h-[320px] sm:w-[420px] sm:h-[420px] md:w-[520px] md:h-[520px] lg:w-[580px] lg:h-[580px]"
           >
-            {/* Stars background */}
+            {/* Definitions */}
             <defs>
               <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#fff7a0" stopOpacity="1" />
@@ -80,17 +102,24 @@ function App() {
                 <stop offset="40%" stopColor="#ffee55" />
                 <stop offset="100%" stopColor="#ff8800" />
               </radialGradient>
+              <filter id="planetGlow">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
-            {/* Random stars */}
-            {Array.from({ length: 80 }).map((_, i) => (
+            {/* Fixed stars background */}
+            {stars.map((star, i) => (
               <circle
                 key={`star-${i}`}
-                cx={Math.random() * 900}
-                cy={Math.random() * 900}
-                r={Math.random() * 1.2 + 0.3}
+                cx={star.cx}
+                cy={star.cy}
+                r={star.r}
                 fill="white"
-                opacity={Math.random() * 0.6 + 0.2}
+                opacity={star.opacity}
               />
             ))}
 
@@ -102,19 +131,34 @@ function App() {
                 cy="450"
                 r={planet.orbitRadius}
                 fill="none"
-                stroke="rgba(255,255,255,0.08)"
-                strokeWidth="1"
+                stroke={selectedPlanet?.id === planet.id ? `${planet.color}40` : 'rgba(255,255,255,0.08)'}
+                strokeWidth={selectedPlanet?.id === planet.id ? '1.5' : '1'}
                 strokeDasharray="4 4"
               />
             ))}
 
             {/* Sun */}
-            <circle cx="450" cy="450" r="40" fill="url(#sunGlow)" />
+            <circle cx="450" cy="450" r="45" fill="url(#sunGlow)" />
             <circle cx="450" cy="450" r="25" fill="url(#sunCore)">
               <animate
                 attributeName="r"
-                values="24;26;24"
+                values="24;27;24"
                 dur="3s"
+                repeatCount="indefinite"
+              />
+            </circle>
+            {/* Sun corona effect */}
+            <circle cx="450" cy="450" r="32" fill="none" stroke="#ffaa00" strokeWidth="0.5" opacity="0.4">
+              <animate
+                attributeName="r"
+                values="30;35;30"
+                dur="4s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.4;0.1;0.4"
+                dur="4s"
                 repeatCount="indefinite"
               />
             </circle>
@@ -149,51 +193,104 @@ function App() {
 
                   {/* Saturn's rings */}
                   {planet.id === 'saturn' && (
-                    <ellipse
-                      cx={pos.x}
-                      cy={pos.y}
-                      rx={planet.radius + 8}
-                      ry={4}
-                      fill="none"
-                      stroke="#f0d890"
-                      strokeWidth="2.5"
-                      opacity="0.7"
-                      transform={`rotate(-20 ${pos.x} ${pos.y})`}
-                    />
+                    <g transform={`translate(${pos.x}, ${pos.y})`}>
+                      <ellipse
+                        cx="0"
+                        cy="0"
+                        rx={planet.radius + 10}
+                        ry={5}
+                        fill="none"
+                        stroke="#f0d890"
+                        strokeWidth="3"
+                        opacity="0.6"
+                        transform="rotate(-20)"
+                      />
+                      <ellipse
+                        cx="0"
+                        cy="0"
+                        rx={planet.radius + 7}
+                        ry={3.5}
+                        fill="none"
+                        stroke="#d4b870"
+                        strokeWidth="1.5"
+                        opacity="0.4"
+                        transform="rotate(-20)"
+                      />
+                    </g>
                   )}
 
-                  {/* Planet body */}
+                  {/* Planet body with gradient */}
                   <circle
                     cx={pos.x}
                     cy={pos.y}
                     r={planet.radius}
                     fill={planet.color}
-                    className="cursor-pointer transition-all duration-200"
+                    className="cursor-pointer"
                     onClick={() => setSelectedPlanet(planet)}
                     onMouseEnter={() => setHoveredPlanet(planet.id)}
                     onMouseLeave={() => setHoveredPlanet(null)}
                     style={{
                       filter: isSelected
-                        ? `drop-shadow(0 0 8px ${planet.color})`
+                        ? `drop-shadow(0 0 10px ${planet.color})`
                         : isHovered
-                        ? `drop-shadow(0 0 4px ${planet.color})`
+                        ? `drop-shadow(0 0 5px ${planet.color})`
                         : 'none',
+                      transition: 'filter 0.2s ease',
                     }}
+                  />
+
+                  {/* Planet highlight (3D effect) */}
+                  <circle
+                    cx={pos.x - planet.radius * 0.3}
+                    cy={pos.y - planet.radius * 0.3}
+                    r={planet.radius * 0.4}
+                    fill="white"
+                    opacity="0.15"
+                    className="pointer-events-none"
                   />
 
                   {/* Planet label on hover */}
                   {isHovered && !isSelected && (
                     <text
                       x={pos.x}
-                      y={pos.y - planet.radius - 8}
+                      y={pos.y - planet.radius - 10}
                       textAnchor="middle"
                       fill="white"
-                      fontSize="10"
+                      fontSize="11"
                       fontWeight="bold"
                       className="pointer-events-none"
+                      style={{ textShadow: '0 0 4px rgba(0,0,0,0.8)' }}
                     >
                       {planet.name}
                     </text>
+                  )}
+
+                  {/* Selected planet name tag */}
+                  {isSelected && (
+                    <g>
+                      <rect
+                        x={pos.x - 30}
+                        y={pos.y - planet.radius - 22}
+                        width="60"
+                        height="16"
+                        rx="4"
+                        fill="rgba(0,0,0,0.7)"
+                        stroke={planet.color}
+                        strokeWidth="1"
+                        className="pointer-events-none"
+                      />
+                      <text
+                        x={pos.x}
+                        y={pos.y - planet.radius - 10}
+                        textAnchor="middle"
+                        fill={planet.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        className="pointer-events-none"
+                      >
+                        {planet.name}
+                      </text>
+                    </g>
                   )}
                 </g>
               );
@@ -204,13 +301,13 @@ function App() {
         {/* Info Panel */}
         <div className="w-full lg:w-80 flex-shrink-0">
           {selectedPlanet ? (
-            <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-xl p-5 shadow-2xl">
+            <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-xl p-5 shadow-2xl animate-fade-in">
               <div className="flex items-center gap-3 mb-4">
                 <div
-                  className="w-10 h-10 rounded-full shadow-lg"
+                  className="w-12 h-12 rounded-full shadow-lg flex-shrink-0"
                   style={{
                     backgroundColor: selectedPlanet.color,
-                    boxShadow: `0 0 15px ${selectedPlanet.color}40`,
+                    boxShadow: `0 0 20px ${selectedPlanet.color}50`,
                   }}
                 />
                 <div>
@@ -225,7 +322,7 @@ function App() {
                 {selectedPlanet.description}
               </p>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <InfoRow
                   icon="📏"
                   label="Radius"
@@ -241,7 +338,7 @@ function App() {
                   label="Orbital Period"
                   value={
                     selectedPlanet.orbitalPeriod > 365
-                      ? `${(selectedPlanet.orbitalPeriod / 365.25).toFixed(1)} years`
+                      ? `${(selectedPlanet.orbitalPeriod / 365.25).toFixed(1)} years (${selectedPlanet.orbitalPeriod.toLocaleString()} days)`
                       : `${selectedPlanet.orbitalPeriod} days`
                   }
                 />
@@ -259,7 +356,7 @@ function App() {
 
               <button
                 onClick={() => setSelectedPlanet(null)}
-                className="mt-4 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+                className="mt-4 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition-colors cursor-pointer"
               >
                 ✕ Close
               </button>
@@ -279,14 +376,14 @@ function App() {
           {/* Planet List */}
           <div className="mt-4 bg-gray-900/60 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4">
             <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">
-              Planets
+              All Planets
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {planets.map((planet) => (
                 <button
                   key={planet.id}
                   onClick={() => setSelectedPlanet(planet)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-all ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-all cursor-pointer ${
                     selectedPlanet?.id === planet.id
                       ? 'bg-gray-700 ring-1 ring-gray-500'
                       : 'bg-gray-800/50 hover:bg-gray-700/50'
@@ -310,7 +407,7 @@ function App() {
           {/* Play/Pause */}
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all cursor-pointer ${
               isPlaying
                 ? 'bg-orange-600 hover:bg-orange-700 text-white'
                 : 'bg-green-600 hover:bg-green-700 text-white'
@@ -332,6 +429,18 @@ function App() {
                 Play
               </>
             )}
+          </button>
+
+          {/* Reset Button */}
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-700 hover:bg-gray-600 text-white transition-all cursor-pointer"
+            title="Reset planet positions"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Reset
           </button>
 
           {/* Speed Control */}
@@ -357,12 +466,12 @@ function App() {
           </div>
 
           {/* Speed Presets */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-center">
             {[0.5, 1, 2, 5].map((s) => (
               <button
                 key={s}
                 onClick={() => setSpeed(s)}
-                className={`px-3 py-1.5 rounded text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
                   Math.abs(speed - s) < 0.05
                     ? 'bg-orange-600 text-white'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -374,6 +483,11 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="w-full py-3 text-center text-xs text-gray-600">
+        Solar System Explorer • Educational Demo
+      </footer>
     </div>
   );
 }
